@@ -1,34 +1,32 @@
 import numpy as np
 import multiprocessing as mp
 
-# Processes each individual segment
-def process_segment(lock, start_row, end_row, image, filter_mask, midrow, midcol, filtered_image):
-    rows, cols, _ = image.shape
+#Processes each individual row
+def process_row(lock, row, image, filter_mask, midrow, midcol, shared_dict):
+    rows, cols = image.shape[:2]
+    filtered_row = np.zeros((cols, 3), dtype=np.uint8)
 
-    for row in range(start_row, end_row):
-        filtered_row = np.zeros((cols, 3), dtype=np.uint8)
+    for c in range(cols):
+        filtered_value = 0
 
-        for c in range(cols):
-            filtered_value = 0
-
-            if midrow == 0:
+        if midrow == 0:
+            for j in range(-midcol, midcol + 1):
+                if (c + j >= 0 and c + j < cols):
+                    filtered_value += image[row, c + j] * filter_mask[j + midcol]
+        elif midcol == 0:
+            for i in range(-midrow, midrow + 1):
+                if (row + i >= 0 and row + i < rows):
+                    filtered_value += image[row + i, c] * filter_mask[i + midrow]
+        else:
+            for i in range(-midrow, midrow + 1):
                 for j in range(-midcol, midcol + 1):
-                    if (c + j >= 0 and c + j < cols):
-                        filtered_value += image[row, c + j] * filter_mask[j + midcol]
-            elif midcol == 0:
-                for i in range(-midrow, midrow + 1):
-                    if (row + i >= 0 and row + i < rows):
-                        filtered_value += image[row + i, c] * filter_mask[i + midrow]
-            else:
-                for i in range(-midrow, midrow + 1):
-                    for j in range(-midcol, midcol + 1):
-                        if (row + i >= 0 and row + i < rows) and (c + j >= 0 and c + j < cols):
-                            filtered_value += np.uint8(image[row + i, c + j] * filter_mask[i + midrow][j + midcol])
+                    if (row + i >= 0 and row + i < rows) and (c + j >= 0 and c + j < cols):
+                        filtered_value += np.uint8(image[row + i, c + j] * filter_mask[i + midrow][j + midcol])
 
-            filtered_row[c] = filtered_value
+        filtered_row[c] = filtered_value
 
-        with lock:
-            filtered_image[row, :] = filtered_row
+    with lock:
+        shared_dict[row] = filtered_row
 
 def image_filter(image, filter_mask, numprocessors, filtered_image):
     # Filter comes in as a 2D matrix (filter_mask)
@@ -54,14 +52,21 @@ def image_filter(image, filter_mask, numprocessors, filtered_image):
 
     # Create a multiprocessing pool
     pool = mp.Pool(processes=numprocessors)
+    
+    manager = mp.Manager()
+    shared_dict = manager.dict()
+
     lock = mp.Manager().Lock()
 
-    # Divide the image into segments for parallel processing
-    segment_size = rows // numprocessors
-    segments = [(lock, i * segment_size, (i + 1) * segment_size, image, filter_mask, midrow, midcol, filtered_image)
-                for i in range(numprocessors)]
+    # Process rows in parallel
+    results = [pool.apply_async(process_row, args=(lock, r, image, filter_mask, midrow, midcol, shared_dict)) for r in range(rows)]
+    
+    # Wait for all processes to finish
+    pool.close()
+    pool.join()
 
-    # Process segments in parallel
-    pool.starmap(process_segment, segments)
+    # Combine the processed rows into the filtered image
+    for r in range(rows):
+        filtered_image[r,:] = shared_dict[r]
 
     return filtered_image
