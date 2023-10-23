@@ -5,7 +5,6 @@ import multiprocessing as mp
 def process_row(lock, row, image, filter_mask, midrow, midcol, shared_dict):
     # Determine the size of the image and the depth
     rows, cols, depth = image.shape
-
     filtered_row = np.zeros((cols, 3), dtype=np.uint8)
 
     # Loop through each column within a row
