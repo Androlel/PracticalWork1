@@ -1,4 +1,3 @@
-import array
 import numpy as np
 
 
@@ -33,7 +32,6 @@ def image_filter(image,
             filtered_value = 0
 
             #We start at the midpoint then go forward or backwards depending on the size of the filter
-            #filtered_image[r,c] = image[r,c]
             #1d array
             if(midrow == 0):
                 for j in range(-midcol,midcol+1):
@@ -52,7 +50,9 @@ def image_filter(image,
                         # Check if the current indices are within bounds
                         if (r + i >= 0 and r + i < rows) and (c + j >= 0 and c + j < cols):
                             # Multiply the filter value with the corresponding pixel value
-                            filtered_value += image[r + i, c + j] * filter_mask[i + midrow][j + midcol]
+                            #filtered_value += image[r + i, c + j] * filter_mask[i + midrow][j + midcol]
+                            filtered_value = np.add(filtered_value, image[r + i, c + j] * filter_mask[i + midrow][j + midcol], out= filtered_image[r, c], casting="unsafe")
+
 
 
             # Assign the filtered value to the corresponding pixel in the filtered image
